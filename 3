@@ -1,0 +1,108 @@
+import numpy as np
+import pandas as pd 
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import layers
+
+batch_size = 100
+img_height = 250
+img_width = 250
+
+# Specify the path to the "color" subfolder or any other subfolder you want to use
+dataset_dir = 'plantvillage dataset/color'  # Choose "color", "greyscale", or "segmented"
+
+# Load the dataset and apply validation split
+full_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    dataset_dir,
+    seed=42,
+    image_size=(img_height, img_width),
+    batch_size=batch_size,
+    validation_split=0.2,  # 20% data for validation
+    subset="training",  # For training data
+    interpolation="bilinear"
+)
+
+# Load the dataset and apply validation split
+full_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    dataset_dir,
+    seed=42,
+    image_size=(img_height, img_width),
+    batch_size=batch_size,
+    validation_split=0.2,  # 20% data for validation
+    subset="training",  # For training data
+    interpolation="bilinear"
+)
+
+# Create validation dataset
+validation_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    dataset_dir,
+    seed=42,
+    image_size=(img_height, img_width),
+    batch_size=batch_size,
+    validation_split=0.2,  # Same validation split
+    subset="validation",  # For validation data
+    interpolation="bilinear"
+)
+
+# Get class names
+class_names = full_ds.class_names
+
+# Preprocessing data for performance
+AUTOTUNE = tf.data.AUTOTUNE
+full_ds = full_ds.prefetch(buffer_size=AUTOTUNE)
+validation_ds = validation_ds.prefetch(buffer_size=AUTOTUNE)
+
+# Build CNN Model
+MyCnn = tf.keras.models.Sequential([
+    layers.Rescaling(1./255, input_shape=(img_height, img_width, 3)),  # Normalize image values
+    layers.BatchNormalization(),
+    layers.Conv2D(32, 3, activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(64, 3, activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(128, 3, activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Flatten(),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.3),  # Dropout layer for regularization
+    layers.Dense(len(class_names), activation='softmax')  # Output layer
+])
+
+# Compile the model
+MyCnn.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Train the model
+retVal = MyCnn.fit(full_ds, validation_data=validation_ds, epochs=2)
+
+# Plot training and validation metrics
+plt.figure(figsize=(10, 5))
+plt.plot(retVal.history['loss'], label='Training Loss')
+plt.plot(retVal.history['accuracy'], label='Training Accuracy')
+plt.plot(retVal.history['val_loss'], label='Validation Loss')
+plt.plot(retVal.history['val_accuracy'], label='Validation Accuracy')
+plt.title("Training and Validation Metrics")
+plt.xlabel("Epoch")
+plt.ylabel("Value")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Prediction visualization: Display predictions with actual labels
+AccuracyVector = []
+plt.figure(figsize=(20, 20))
+for images, labels in validation_ds.take(1):
+    predictions = MyCnn.predict(images)
+    predlabel = [class_names[np.argmax(pred)] for pred in predictions]
+    prdlbl = [np.argmax(pred) for pred in predictions]
+        
+    AccuracyVector = np.array(prdlbl) == labels.numpy()
+
+    for i in range(40):
+        ax = plt.subplot(10, 4, i + 1)
+        plt.imshow(images[i].numpy().astype("uint8"))
+        plt.title(f"Pred: {predlabel[i]}\nActual: {class_names[labels[i]]}",
+                  fontsize=8, color='green' if AccuracyVector[i] else 'red')
+        plt.axis("off")
+
+plt.tight_layout()
+plt.show()
